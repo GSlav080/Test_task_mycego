@@ -1,4 +1,6 @@
 import threading
+import uuid
+
 from django.shortcuts import render, redirect
 from django.views import View
 from yadisk_viewer.utils.yadisk_api import YandexDiskAPI
@@ -38,10 +40,12 @@ class DownloadMultipleView(View):
         if not zip_path or not os.path.exists(zip_path):
             return JsonResponse({'error': 'Не удалось создать архив'}, status=500)
 
-        response = FileResponse(open(zip_path, 'rb'), content_type='application/zip')
-        response['Content-Disposition'] = 'attachment; filename="selected_files.zip"'
+        unique_filename = f"{uuid.uuid4().hex}.zip"
 
-        # Удаление временного файла через поток, чтобы не блокировать ответ
+        response = FileResponse(open(zip_path, 'rb'), content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="{unique_filename}"'
+
+        # Удаление временного файла через поток
         def cleanup():
             try:
                 os.remove(zip_path)
@@ -52,7 +56,6 @@ class DownloadMultipleView(View):
         threading.Thread(target=cleanup).start()
 
         return response
-
 
 # Базовая страница (index.html)
 class IndexView(View):
