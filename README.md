@@ -18,7 +18,7 @@
 
     ```bash
     git clone https://github.com/GSlav080/Test_task_mycego.git
-    cd your-repo
+    cd Test_task_mycego
     ```
 
 2. Создайте виртуальное окружение (Для Windows):
