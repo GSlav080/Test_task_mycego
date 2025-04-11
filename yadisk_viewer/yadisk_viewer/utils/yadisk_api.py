@@ -76,25 +76,29 @@ class YandexDiskAPI:
             print(f"Ошибка при получении содержимого папки: {e}")
             return None
 
-
     @staticmethod
-    def filter_files_by_type(files_data: Dict, file_type: str) -> List[Dict]:
-        """Фильтрует файлы по типу (image, document, etc.)"""
-        type_mapping = {
-            'image': ['image/jpeg', 'image/png', 'image/gif'],
-            'document': ['application/pdf', 'application/msword',
-                         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-            'archive': ['application/zip', 'application/x-rar-compressed'],
-            'video': ['video/mp4', 'video/avi']
-        }
-
-        if file_type not in type_mapping:
+    def filter_files_by_type(data, file_type):
+        """Фильтрует список файлов по media_type"""
+        print(file_type)
+        if '_embedded' not in data or 'items' not in data['_embedded']:
             return []
 
+        items = data['_embedded']['items']
         filtered = []
-        for item in files_data.get('_embedded', {}).get('items', []):
-            if item['type'] == 'file' and item.get('media_type') in type_mapping[file_type]:
-                filtered.append(item)
+
+        for item in items:
+            media_type = item.get('media_type')
+            # Фильтруем только файлы нужного типа (а не папки)
+            if item.get('type') == 'file' and media_type == file_type:
+                filtered.append({
+                    'name': item.get('name', ''),
+                    'path': item.get('path', ''),
+                    'type': item.get('type', 'file'),
+                    'size': item.get('size', 0),
+                    'modified': item.get('modified', ''),
+                    'media_type': media_type
+                })
+
         return filtered
 
 
@@ -117,3 +121,4 @@ class YandexDiskAPI:
                         zipf.writestr(file_name, response.content)
 
         return zip_path
+

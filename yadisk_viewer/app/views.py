@@ -1,12 +1,13 @@
 import threading
-
 from django.shortcuts import render, redirect
 from django.views import View
 from yadisk_viewer.utils.yadisk_api import YandexDiskAPI
 from django.http import JsonResponse, FileResponse
 import os
+from django.core.cache import cache
 
 
+# Фильтрация типов файлов
 class FilterFilesView(View):
     def get(self, request):
         public_key = request.session.get('public_key')
@@ -23,7 +24,7 @@ class FilterFilesView(View):
         filtered_files = YandexDiskAPI.filter_files_by_type(data, file_type)
         return JsonResponse({'files': filtered_files})
 
-
+# Загрузка нескольких файлов
 class DownloadMultipleView(View):
     def post(self, request):
         public_key = request.session.get('public_key')
@@ -55,7 +56,6 @@ class DownloadMultipleView(View):
 
 # Базовая страница (index.html)
 class IndexView(View):
-
     template_name: str = 'app/index.html'
 
     def get(self, request):
@@ -73,6 +73,7 @@ class IndexView(View):
         request.session['public_key'] = public_key
         return redirect('files_list')
 
+
 # Страница показа файлов
 class FilesListView(View):
     template_name = 'app/files_list.html'
@@ -85,7 +86,13 @@ class FilesListView(View):
         if not public_key:
             return redirect('index')
 
-        data = YandexDiskAPI.get_folder_contents(public_key, current_path)
+        cache_key = f'yadisk_{public_key}_{current_path or "root"}'
+        data = cache.get(cache_key)
+
+        if not data:
+            data = YandexDiskAPI.get_folder_contents(public_key, current_path)
+            if data:
+                cache.set(cache_key, data, timeout=180)
 
         if not data or 'error' in data:
             return render(request, self.template_name, {
@@ -124,6 +131,8 @@ class FilesListView(View):
             'parent_path': '/'.join(current_path.split('/')[:-1]) if current_path else '',
             'selected_type': file_type
         })
+
+
 # Загрузчик
 class DownloadView(View):
     def get(self, request, path):
@@ -140,4 +149,3 @@ class DownloadView(View):
             })
 
         return redirect(download_url)
-
