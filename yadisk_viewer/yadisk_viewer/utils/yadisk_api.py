@@ -50,3 +50,26 @@ class YandexDiskAPI:
         except requests.RequestException as e:
             print(f"Ошибка при получении ссылки для скачивания: {e}")
             return None
+
+
+    @staticmethod
+    def get_folder_contents(public_key: str, path: str = '') -> Optional[Dict]:
+        """
+        Получает содержимое конкретной папки по публичной ссылке и пути
+        :param public_key: Публичная ссылка на папку
+        :param path: Путь внутри папки (относительный)
+        :return: Словарь с данными о файлах или None при ошибке
+        """
+        params = {
+            'public_key': public_key,
+            'path': path,
+            'limit': 1000
+        }
+
+        try:
+            response = requests.get(YandexDiskAPI.BASE_URL, params=params)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            print(f"Ошибка при получении содержимого папки: {e}")
+            return None

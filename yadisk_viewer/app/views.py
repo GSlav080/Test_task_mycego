@@ -28,19 +28,30 @@ class FilesListView(View):
 
     def get(self, request):
         public_key = request.session.get('public_key')
+        current_path = request.GET.get('path', '')
 
-        # Если не публичный ключ, отправляет на главную
         if not public_key:
             return redirect('index')
 
-        data = YandexDiskAPI.get_files_list(public_key)
+        data = YandexDiskAPI.get_folder_contents(public_key, current_path)
 
         if not data or 'error' in data:
             return render(request, self.template_name, {
-                'error': 'Не удалось получить файлы. Проверьте ссылку.'
+                'error': 'Не удалось получить содержимое папки. Проверьте ссылку.'
             })
 
         files = []
+        breadcrumbs = []
+
+        if current_path:
+            parts = current_path.split('/')
+            for i, part in enumerate(parts):
+                if part:
+                    breadcrumbs.append({
+                        'name': part,
+                        'path': '/'.join(parts[:i + 1])
+                    })
+
         if '_embedded' in data and 'items' in data['_embedded']:
             for item in data['_embedded']['items']:
                 files.append({
@@ -54,10 +65,13 @@ class FilesListView(View):
 
         return render(request, self.template_name, {
             'files': files,
-            'public_key': public_key
+            'public_key': public_key,
+            'current_path': current_path,
+            'breadcrumbs': breadcrumbs,
+            'parent_path': '/'.join(current_path.split('/')[:-1]) if current_path else ''
         })
 
-#
+# Загрузчик
 class DownloadView(View):
     def get(self, request, path):
         public_key = request.session.get('public_key')
