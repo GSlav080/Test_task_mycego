@@ -1,11 +1,62 @@
+import threading
+
 from django.shortcuts import render, redirect
 from django.views import View
 from yadisk_viewer.utils.yadisk_api import YandexDiskAPI
+from django.http import JsonResponse, FileResponse
+import os
+
+
+class FilterFilesView(View):
+    def get(self, request):
+        public_key = request.session.get('public_key')
+        file_type = request.GET.get('type')
+        current_path = request.GET.get('path', '')
+
+        if not public_key or not file_type:
+            return JsonResponse({'error': 'Missing parameters'}, status=400)
+
+        data = YandexDiskAPI.get_folder_contents(public_key, current_path)
+        if not data:
+            return JsonResponse({'error': 'Failed to get files'}, status=500)
+
+        filtered_files = YandexDiskAPI.filter_files_by_type(data, file_type)
+        return JsonResponse({'files': filtered_files})
+
+
+class DownloadMultipleView(View):
+    def post(self, request):
+        public_key = request.session.get('public_key')
+        file_paths = request.POST.getlist('file_paths[]')
+
+        if not public_key or not file_paths:
+            return JsonResponse({'error': 'Параметры не переданы'}, status=400)
+
+        zip_path = YandexDiskAPI.create_zip_from_files(public_key, file_paths)
+
+        if not zip_path or not os.path.exists(zip_path):
+            return JsonResponse({'error': 'Не удалось создать архив'}, status=500)
+
+        response = FileResponse(open(zip_path, 'rb'), content_type='application/zip')
+        response['Content-Disposition'] = 'attachment; filename="selected_files.zip"'
+
+        # Удаление временного файла через поток, чтобы не блокировать ответ
+        def cleanup():
+            try:
+                os.remove(zip_path)
+                os.rmdir(os.path.dirname(zip_path))
+            except Exception:
+                pass
+
+        threading.Thread(target=cleanup).start()
+
+        return response
+
 
 # Базовая страница (index.html)
 class IndexView(View):
 
-    template_name = 'app/index.html'
+    template_name: str = 'app/index.html'
 
     def get(self, request):
         return render(request, self.template_name)
@@ -29,6 +80,7 @@ class FilesListView(View):
     def get(self, request):
         public_key = request.session.get('public_key')
         current_path = request.GET.get('path', '')
+        file_type = request.GET.get('type', '')
 
         if not public_key:
             return redirect('index')
@@ -43,6 +95,7 @@ class FilesListView(View):
         files = []
         breadcrumbs = []
 
+        # Формируем хлебные крошки
         if current_path:
             parts = current_path.split('/')
             for i, part in enumerate(parts):
@@ -68,9 +121,9 @@ class FilesListView(View):
             'public_key': public_key,
             'current_path': current_path,
             'breadcrumbs': breadcrumbs,
-            'parent_path': '/'.join(current_path.split('/')[:-1]) if current_path else ''
+            'parent_path': '/'.join(current_path.split('/')[:-1]) if current_path else '',
+            'selected_type': file_type
         })
-
 # Загрузчик
 class DownloadView(View):
     def get(self, request, path):
@@ -87,3 +140,4 @@ class DownloadView(View):
             })
 
         return redirect(download_url)
+
